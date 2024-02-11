@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Webcam slow motion instant replay</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        #videoLive {
+            height: 80px;
+        }
+
+        .videoRecorded {
+            width: 50%;
+            height: 100%;
+            overflow: hidden;
+            display: block;
+            object-fit: cover;
+        }
+
+        #videos {
+            display: flex;
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 10;
+        }
+
+        #timeOverlayLeft,  #timeOverlayRight{
+            position: absolute;
+            bottom: 70px;
+            z-index: 20;
+            font-size: 30px;
+        }
+        #timeOverlayLeft{
+            right: 0;
+        }
+        #timeOverlayRight{
+            left: 0;
+        }
+
+        .reversed {
+            flex-direction: row-reverse;
+        }
+
+        .ctrl {
+            display: flex;
+            align-items: start;
+            position: absolute;
+            z-index: 100;
+        }
+
+        .ctrl button {
+            align-self: stretch;
+            min-width: 80px;
+            margin-right: 5px;
+        }
+
+        .ctrl input {
+            margin-left: 20px;
+        }
+        .ctrl label {
+            margin-left: 2px;
+        }
+
+        #interval {
+            width: 50px;
+            align-self: start;
+        }
+
+        .mirror video {
+            transform: rotateY(180deg);
+            -webkit-transform: rotateY(180deg); /* Safari and Chrome */
+            -moz-transform: rotateY(180deg); /* Firefox */
+        }
+
+        #countdown {
+            font-size: 40px;
+            background-color: #858585;
+        }
+    </style>
+</head>
+<body>
+<div class="ctrl">
+    <button type="button" id="buttonStart">Start</button>
+    <button type="button" disabled id="buttonStop">Stop</button>
+    <video autoplay muted playsinline id="videoLive"></video>
+    <input type="number" value="5" id="interval" min="1"> <label for="interval">interval</label>
+    <input type="checkbox" id="mirror"> <label for="mirror">mirror</label>
+    <div id="countdown"></div>
+</div>
+<div id="videos"></div>
+    <div id="timeOverlayLeft"></div>
+    <div id="timeOverlayRight"></div>
+<script>
+    async function main() {
+        const interval = document.querySelector('#interval')
+        const buttonStart = document.querySelector('#buttonStart')
+        const buttonStop = document.querySelector('#buttonStop')
+        const videoLive = document.querySelector('#videoLive')
+        const videos = document.querySelector('#videos')
+        const countdown = document.querySelector('#countdown')
+        const mirror = document.querySelector('#mirror')
+        const timeOverlayLeft = document.querySelector('#timeOverlayLeft')
+        const timeOverlayRight = document.querySelector('#timeOverlayRight')
+        const stream = await navigator.mediaDevices.getUserMedia({video: true})
+        const mediaRecorder = new MediaRecorder(stream, {mimeType: 'video/webm'})
+        let intervalId;
+        let countdownIntervalId;
+        let recording;
+        let nextInterval;
+        videoLive.srcObject = stream;
+        if (!MediaRecorder.isTypeSupported('video/webm')) {
+            console.warn('video/webm is not supported')
+        }
+        buttonStart.addEventListener('click', () => {
+            recording = true;
+            nextInterval = new Date().getTime() + 1000 * interval.value
+            countdown.display = "block"
+            countdownIntervalId = setInterval(() => {
+                countdown.textContent = ((nextInterval - new Date().getTime()) / 1000).toFixed(1)
+            }, 100);
+            buttonStart.setAttribute('disabled', '')
+            buttonStop.removeAttribute('disabled')
+            mediaRecorder.start();
+            intervalId = setInterval(() => {
+                mediaRecorder.stop();
+                setTimeout(() => mediaRecorder.start(), 100);
+                nextInterval = new Date().getTime() + 1000 * interval.value
+            }, interval.value * 1000);
+        })
+        buttonStop.addEventListener('click', () => {
+            clearInterval(intervalId);
+            clearInterval(countdownIntervalId);
+            recording = false;
+            countdown.display = "none"
+            buttonStop.setAttribute('disabled', '')
+            buttonStart.removeAttribute('disabled')
+            mediaRecorder.stop();
+        })
+
+        mediaRecorder.addEventListener('dataavailable', event => {
+            if (recording) {
+                const videoRecorded = document.createElement("video");
+                videoRecorded.autoplay = true;
+                videoRecorded.controls = true;
+                videoRecorded.loop = true;
+                videoRecorded.playsinline = true;
+                videoRecorded.className = "videoRecorded";
+                videoRecorded.src = URL.createObjectURL(event.data);
+                videoRecorded.playbackRate = 0.5;
+                videos.appendChild(videoRecorded);
+                while (videos.childNodes.length > 2) {
+                    videos.removeChild(videos.childNodes[0]);
+                }
+                if( videos.className === 'reversed'){
+                    videos.className =  '';
+                    timeOverlayLeft.textContent =  'new';
+                    timeOverlayRight.textContent =  'old';
+                }else {
+                    videos.className = 'reversed';
+                    timeOverlayLeft.textContent =  'old';
+                    timeOverlayRight.textContent =  'new';
+                }
+            }
+        })
+        mirror.addEventListener("change", () => {
+            document.body.className = mirror.checked ? "mirror" : "";
+        })
+    }
+
+    main()
+</script>
+</body>
+</html>
